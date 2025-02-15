@@ -1,0 +1,537 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Markdown Preview</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        #sidebar {
+            width: 300px;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            background: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+        }
+        #main-content {
+            margin-left: 300px; /* 与侧边栏宽度一致 */
+            width: calc(100% - 300px);
+        }
+        #preview { height: calc(100vh - 60px); overflow-y: auto }
+        .tree-toggle { cursor: pointer; width: 20px }
+        .nav-tabs .nav-link { border-radius: 0; border: none; position: relative }
+        .nav-tabs .nav-link.active { border-bottom: 2px solid #0d6efd }
+        .tab-close { padding-left: 10px; cursor: pointer }
+        .dropdown-menu {
+            z-index: 1000;
+            min-width: 180px;
+        }
+        .favorite-item { cursor: pointer; padding: 5px 10px }
+        #sidebar .nav-tabs {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 100;
+        }
+        #file-tree, #favorites-list {
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+        .favorite-item:hover { background: #f8f9fa }
+        .toast {
+            min-width: 200px;
+        }
+        .file-name {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: inline-block;
+        }
+        .folder-header {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            background: white;
+            transition: background 0.2s;
+        }
+        .folder-header:hover {
+            background: #f8f9fa;
+        }
+        .folder-title {
+            flex-grow: 1;
+            padding: 8px 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .folder-children {
+            margin-left: 10px;
+        }
+        /* 语言切换按钮样式 */
+        #language-toggle {
+            position: fixed;
+            top: 5px;
+            left: 295px;
+            transform: translateX(-100%);
+            z-index: 1050;
+        }
+        #language-toggle button {
+            background: linear-gradient(135deg, #0d6efd, #084298);
+            border: none;
+            color: #fff;
+            font-weight: bold;
+            padding: 5px 15px;
+            border-radius: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: background 0.3s ease;
+        }
+        #language-toggle button:hover {
+            background: linear-gradient(135deg, #084298, #0d6efd);
+        }
+    </style>
+</head>
+<body>
+    <!-- 语言切换按钮 -->
+    <div id="language-toggle">
+        <button class="btn btn-secondary btn-sm">English</button>
+    </div>
+
+    <div class="d-flex">
+        <!-- 侧边栏 -->
+        <div id="sidebar" class="bg-light border-end">
+            <ul class="nav nav-tabs" id="sidebarTabs">
+                <li class="nav-item">
+                    <a class="nav-link active" href="#files" data-bs-toggle="tab"
+                       data-i18n-en="Files" data-i18n-zh="文件">Files</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#favorites" data-bs-toggle="tab"
+                       data-i18n-en="Favorites" data-i18n-zh="收藏">Favorites</a>
+                </li>
+            </ul>
+            
+            <div class="tab-content p-2">
+                <!-- 文件树 -->
+                <div class="tab-pane active" id="files">
+                    <div id="file-tree"></div>
+                </div>
+                
+                <!-- 收藏夹 -->
+                <div class="tab-pane" id="favorites">
+                    <div id="favorites-list" class="list-group"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主内容区结构调整 -->
+        <div id="main-content">
+            <ul class="nav nav-tabs" id="nav-tabs"></ul>
+            <div id="preview" class="markdown-body p-4"></div>
+        </div>
+    </div>
+
+    <!-- 模板结构 -->
+    <template id="file-item-template">
+        <li class="list-group-item file-item p-0">
+            <!-- 文件夹头部 -->
+            <div class="folder-header px-3">
+                <span class="tree-toggle me-2"></span>
+                <span class="folder-title"></span>
+                <div class="file-actions">
+                    <div class="btn-group">
+                        <i class="bi-three-dots-vertical" 
+                           data-bs-toggle="dropdown" 
+                           onclick="event.stopPropagation()"></i>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item toggle-favorite" 
+                                   data-i18n-en="Favorite" 
+                                   data-i18n-zh="收藏">
+                                    Favorite
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item copy-path" 
+                                   data-type="relative"
+                                   data-i18n-en="Copy Relative Path" 
+                                   data-i18n-zh="复制相对路径">
+                                    Copy Relative Path
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item copy-path" 
+                                   data-type="absolute"
+                                   data-i18n-en="Copy Absolute Path" 
+                                   data-i18n-zh="复制绝对路径">
+                                    Copy Absolute Path
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <!-- 子内容容器 -->
+            <!-- <div class="folder-children"></div> -->
+        </li>
+    </template>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let state = {
+            openFiles: [],
+            activeFile: null,
+            treeState: {},
+            favorites: [],
+            currentTab: 'files'
+        }
+        // 默认语言从 localStorage 读取，否则为 English（en）
+        var currentLanguage = localStorage.getItem('language') || 'en';
+
+        // 更新页面所有双语文本
+        function updateLanguage() {
+            $('[data-i18n-en][data-i18n-zh]').each(function(){
+                var $el = $(this);
+                var text = currentLanguage === 'en' ? $el.data('i18n-en') : $el.data('i18n-zh');
+                $el.text(text);
+            });
+            // 更新语言切换按钮文本
+            $('#language-toggle button').text(currentLanguage === 'en' ? "🌐 中文" : "🌐 English");
+        }
+
+        // 初始化
+        $(document).ready(function() {
+            // loadState()
+            initFileTree()
+            loadFavorites()
+            bindEvents()
+            restoreTabs()
+            updateLanguage();
+        })
+
+        function loadState() {
+            const saved = localStorage.getItem('md-preview-state')
+            if (saved) {
+                state = {...state, ...JSON.parse(saved)}
+                state.openFiles.forEach(path => addTab(path, false))
+                if (state.activeFile) showPreview(state.activeFile)
+            }
+        }
+
+        function saveState() {
+            localStorage.setItem('md-preview-state', JSON.stringify({
+                openFiles: state.openFiles,
+                activeFile: state.activeFile,
+                treeState: state.treeState,
+                favorites: state.favorites
+            }))
+        }
+
+        // 路径处理工具 --------------------------------------------------------
+        const baseDir = "{{ BASE_DIR | replace('\\', '/') }}";
+        console.log("Base Directory:", baseDir); // 调试用
+
+        const Path = {
+            relative: (base, target) => {
+                base = base.replace(/\\/g, '/');
+                target = target.replace(/\\/g, '/');
+                
+                const baseParts = base.split('/').filter(p => p);
+                const targetParts = target.split('/').filter(p => p);
+                
+                let i = 0;
+                while (i < baseParts.length && i < targetParts.length && baseParts[i] === targetParts[i]) i++;
+                
+                const relative = [];
+                for (let j = i; j < baseParts.length; j++) relative.push('..');
+                return [...relative, ...targetParts.slice(i)].join('/');
+            }
+        };
+
+        // 文件树功能 --------------------------------------------------------
+        function initFileTree() {
+            loadChildren("${BASE_DIR}", $('#file-tree'))
+            Object.keys(state.treeState).forEach(path => {
+                if (state.treeState[path]) loadChildren(path, $(`[data-path="${path}"]`).parent())
+            })
+        }
+
+        function loadChildren(path, $container) {
+            $.get('/api/get_children?path=' + encodeURIComponent(path), items => {
+                let $childrenContainer = $container.find('div.folder-children');
+                if ($childrenContainer.length === 0) {
+                    $childrenContainer = $('<div class="folder-children"></div>');
+                    $container.append($childrenContainer);
+                } else {
+                    $childrenContainer.empty();
+                }
+                const $ul = $('<ul class="list-group"></ul>');
+                items.forEach(item => {
+                    // 过滤非markdown文件（非文件夹且非 markdown 文件）
+                    if(!item.is_dir && !item.name.endsWith('.md')) return;
+
+                    const $li = $(document.getElementById('file-item-template').content.cloneNode(true));
+                    const $fileItem = $li.find('.file-item');
+
+                    // 设置标题
+                    $fileItem.find('.folder-title')
+                        .text(item.name)
+                        .attr('title', item.name);
+
+                    $fileItem.data('item', item);
+
+                    if(item.is_dir) {
+                        // 文件夹：仅显示图标，不显示 dropdown
+                        $fileItem.find('.tree-toggle').html('<i class="bi bi-folder2"></i>');
+                        // 移除后面的下拉菜单
+                        $fileItem.find('.file-actions').remove();
+                        // 点击文件夹头部切换状态
+                        $fileItem.find('.folder-header').click(function(e) {
+                            toggleFolder(e, $fileItem, item);
+                        });
+                        if (state.treeState[item.path]) {
+                            $fileItem.find('.tree-toggle i').removeClass('bi-folder2').addClass('bi-folder');
+                            loadChildren(item.path, $fileItem);
+                        }
+                    } else {
+                        // markdown 文件：显示文件图标和下拉菜单
+                        $fileItem.find('.tree-toggle').html('<i class="bi bi-file-earmark"></i>');
+                        $fileItem.find('.folder-header').click(() => openFile(item.path));
+                        // 更新收藏菜单项
+                        const isFav = state.favorites.some(f => f.path === item.path);
+                        $fileItem.find('.toggle-favorite')
+                            .text(isFav ? (currentLanguage === 'en' ? 'Unfavorite' : '取消收藏')
+                                        : (currentLanguage === 'en' ? 'Favorite' : '收藏'))
+                            .data('action', isFav ? 'remove' : 'add');
+                    }
+
+                    $ul.append($li);
+                });
+                $childrenContainer.html($ul);
+                $container.append($childrenContainer);
+            });
+        }
+
+        function toggleFolder(e, $fileItem, item) {
+            e.stopPropagation()
+            const wasOpen = state.treeState[item.path] || false
+            state.treeState[item.path] = !wasOpen
+            saveState()
+
+            if(!wasOpen) {
+                loadChildren(item.path, $fileItem)
+                $fileItem.find('.tree-toggle i').removeClass('bi-folder2').addClass('bi-folder')
+            } else {
+                $fileItem.find('ul').remove()
+                $fileItem.find('.tree-toggle i').removeClass('bi-folder').addClass('bi-folder2')
+            }
+        }
+
+        // 标签页功能 --------------------------------------------------------
+        function openFile(path) {
+            if(!state.openFiles.includes(path)) {
+                state.openFiles.push(path)
+                addTab(path)
+            }
+            showPreview(path)
+            saveState()
+        }
+
+        function addTab(path, show=true) {
+            const name = path.split('/').pop()
+            const $tab = $(`
+                <li class="nav-item">
+                    <a class="nav-link" data-path="${path}">
+                        ${name}
+                        <span class="tab-close">&times;</span>
+                    </a>
+                </li>
+            `)
+            $('#nav-tabs').append($tab)
+            if(show) showPreview(path)
+        }
+
+        function restoreTabs() {
+            state.openFiles.forEach(path => addTab(path, false))
+            if(state.activeFile) showPreview(state.activeFile)
+        }
+
+        function closeTab(path) {
+            const index = state.openFiles.indexOf(path)
+            if (index > -1) {
+                state.openFiles.splice(index, 1)
+                $(`#nav-tabs .nav-link[data-path="${path}"]`).parent().remove()
+                
+                if (state.activeFile === path) {
+                    state.activeFile = state.openFiles[state.openFiles.length - 1] || null
+                    if (state.activeFile) showPreview(state.activeFile)
+                }
+                saveState()
+            }
+        }
+
+        function showPreview(path) {
+            state.activeFile = path
+            $.get(`/api/get_md?path=${encodeURIComponent(path)}`, html => {
+                $('#preview').html(html)
+                updateTabs()
+                saveState()
+            }).fail(() => {
+                $('#preview').html('<div class="alert alert-danger">文件加载失败</div>')
+            })
+        }
+
+        function updateTabs() {
+            $('#nav-tabs .nav-link').removeClass('active')
+            $(`#nav-tabs .nav-link[data-path="${state.activeFile}"]`).addClass('active')
+        }
+
+        // 收藏功能 --------------------------------------------------------
+        function loadFavorites() {
+            $.get('/api/favorites', favorites => {
+                state.favorites = favorites
+                renderFavorites()
+            })
+        }
+
+        function renderFavorites() {
+            const $list = $('#favorites-list').empty()
+            state.favorites.forEach(fav => {
+                const fileName = fav.path.split('/').pop()
+                $list.append(`
+                    <div class="favorite-item list-group-item d-flex justify-content-between align-items-center" 
+                         data-path="${fav.path}">
+                        <div>
+                            <div>${fileName}</div>
+                            <div class="small text-muted">${fav.note || (currentLanguage === 'en' ? 'No Note' : '无备注')}</div>
+                        </div>
+                        <i class="bi bi-x-circle text-danger btn-unfavorite"></i>
+                    </div>
+                `)
+            })
+        }
+
+        // 路径复制功能 --------------------------------------------------------
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const toast = $(`
+                    <div class="toast align-items-center text-white bg-success border-0 position-fixed bottom-0 end-0 m-3" 
+                         role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="d-flex">
+                            <div class="toast-body">${currentLanguage === 'en' ? 'Copied to clipboard' : '已复制到剪贴板'}</div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                        </div>
+                    </div>
+                `)
+                $('body').append(toast)
+                new bootstrap.Toast(toast.get(0)).show()
+                setTimeout(() => toast.remove(), 2000)
+            })
+        }
+
+        // 事件绑定 --------------------------------------------------------
+        function bindEvents() {
+            // 标签页关闭
+            $('#nav-tabs').on('click', '.tab-close', function(e) {
+                e.stopPropagation()
+                const path = $(this).closest('.nav-link').data('path')
+                closeTab(path)
+            })
+
+            // 切换标签页
+            $('#nav-tabs').on('click', '.nav-link', function() {
+                const path = $(this).data('path')
+                showPreview(path)
+            })
+
+            // 收藏功能
+            $(document).on('click', '.toggle-favorite', function() {
+                const $item = $(this).closest('.file-item')
+                const path = $item.data('item').path
+                const action = $(this).data('action')
+                
+                if(action === 'add') {
+                    const note = prompt(currentLanguage === 'en' ? 'Enter a note for favorite:' : '请输入收藏备注：')
+                    if(note !== null) {
+                        $.ajax({
+                            url: '/api/favorites',
+                            method: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ path, note }),
+                            success: () => {
+                                loadFavorites()
+                                $(this).text(currentLanguage === 'en' ? 'Unfavorite' : '取消收藏').data('action', 'remove')
+                            }
+                        })
+                    }
+                } else {
+                    if(confirm(currentLanguage === 'en' ? 'Are you sure to remove favorite?' : '确定要取消收藏吗？')) {
+                        $.ajax({
+                            url: '/api/favorites',
+                            method: 'DELETE',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ path }),
+                            success: () => {
+                                loadFavorites()
+                                $(this).text(currentLanguage === 'en' ? 'Favorite' : '收藏').data('action', 'add')
+                            }
+                        })
+                    }
+                }
+            })
+
+            // 取消收藏
+            $('#favorites-list').on('click', '.btn-unfavorite', function(e) {
+                e.stopPropagation()
+                const path = $(this).closest('.favorite-item').data('path')
+                if(confirm(currentLanguage === 'en' ? 'Are you sure to remove favorite?' : '确定要取消收藏吗？')) {
+                    $.ajax({
+                        url: '/api/favorites',
+                        method: 'DELETE',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ path }),
+                        success: () => {
+                            loadFavorites()
+                        }
+                    })
+                }
+            })
+
+            // 路径复制功能
+            $(document).on('click', '.copy-path', function() {
+                const type = $(this).data('type');
+                const path = $(this).closest('.file-item').data('item').path;
+                
+                let text = path;
+                if (type === 'relative') {
+                    text = Path.relative(baseDir, path);
+                }
+                copyToClipboard(text);
+            });
+
+            // 收藏夹点击
+            $('#favorites-list').on('click', '.favorite-item', function() {
+                const path = $(this).data('path')
+                openFile(path)
+            })
+
+            // 侧边栏切换
+            $('#sidebarTabs a').on('shown.bs.tab', function(e) {
+                state.currentTab = e.target.getAttribute('href').substring(1)
+                saveState()
+            })
+
+            // 语言切换事件
+            $('#language-toggle button').on('click', function(){
+                currentLanguage = currentLanguage === 'en' ? 'zh' : 'en';
+                localStorage.setItem('language', currentLanguage);
+                updateLanguage();
+            });
+        }
+    </script>
+</body>
+</html>
