@@ -16,14 +16,45 @@
             background: #f8f9fa;
             border-right: 1px solid #dee2e6;
         }
+        /* 修改 main-content, preview 与 preview-footer 样式 */
         #main-content {
-            margin-left: 300px; /* 与侧边栏宽度一致 */
+            margin-left: 300px;
             width: calc(100% - 300px);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
-        #preview { height: calc(100vh - 60px); overflow-y: auto }
+        /* 保证 nav-tabs 自适应内容，不占用额外空间 */
+        #nav-tabs {
+            flex-shrink: 0;
+        }
+        /* 预览区占满剩余空间 */
+        #preview {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        /* 底部操作栏固定高度 */
+        #preview-footer {
+            flex-shrink: 0;
+            height: 60px;
+        }
+        #favorite-note {
+            max-height: 40px;
+            max-width: 50%;
+            overflow-y: auto;
+            white-space: normal;
+        }
         .tree-toggle { cursor: pointer; width: 20px }
-        .nav-tabs .nav-link { border-radius: 0; border: none; position: relative }
-        .nav-tabs .nav-link.active { border-bottom: 2px solid #0d6efd }
+        .nav-tabs .nav-link {
+            border-radius: 0;
+            border: none;
+            color: #000;
+            position: relative
+        }
+        .nav-tabs .nav-link.active {
+            border-bottom: 2px solid #0d6efd;
+            color: #0d6efd;
+        }
         .tab-close { padding-left: 10px; cursor: pointer }
         .dropdown-menu {
             z-index: 1000;
@@ -50,6 +81,13 @@
             text-overflow: ellipsis;
             white-space: nowrap;
             display: inline-block;
+        }
+        .bi-three-dots-vertical {
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        .bi-three-dots-vertical:hover {
+            opacity: 1;
         }
         .folder-header {
             display: flex;
@@ -91,6 +129,12 @@
         #language-toggle button:hover {
             background: linear-gradient(135deg, #084298, #0d6efd);
         }
+        /* Fixed width for favorites note to allow full wrapped display */
+        #favorites-list .favorite-item > div > .small.text-muted {
+            width: 250px;
+            word-break: break-all;
+            white-space: normal;
+        }
     </style>
 </head>
 <body>
@@ -130,6 +174,13 @@
         <div id="main-content">
             <ul class="nav nav-tabs" id="nav-tabs"></ul>
             <div id="preview" class="markdown-body p-4"></div>
+            <!-- 新增：预览区底部操作栏 -->
+            <div id="preview-footer" class="d-flex justify-content-end align-items-center p-2 border-top">
+                <span id="favorite-note" class="me-auto"></span>
+                <button class="btn btn-outline-primary btn-favorite me-2"></button>
+                <button class="btn btn-outline-secondary btn-copy-relative me-2" data-i18n-en="Copy Relative Path" data-i18n-zh="复制相对路径"></button>
+                <button class="btn btn-outline-secondary btn-copy-absolute" data-i18n-en="Copy Absolute Path" data-i18n-zh="复制绝对路径"></button>
+            </div>
         </div>
     </div>
 
@@ -207,6 +258,7 @@
                     updateToggleFavorite($(this));
                 }
             });
+            updatePreviewFooter();
         }
         
         // 新增：更新单个文件项toggle-favorite按钮的文本与操作
@@ -349,6 +401,19 @@
             }
         }
 
+        function updateFileTreeHighlight() {
+            $('.file-item').each(function() {
+                const item = $(this).data('item');
+                if(item) {
+                    if(item.path === state.activeFile) {
+                        $(this).css('color', 'blue');
+                    } else {
+                        $(this).css('color', '');
+                    }
+                }
+            });
+        }
+
         // 标签页功能 --------------------------------------------------------
         function openFile(path) {
             if(!state.openFiles.includes(path)) {
@@ -392,20 +457,45 @@
             }
         }
 
+        function updateTabs() {
+            $('#nav-tabs .nav-link').removeClass('active')
+            $(`#nav-tabs .nav-link[data-path="${state.activeFile}"]`).addClass('active')
+        }
+
+        // 预览功能 --------------------------------------------------------
+        function updatePreviewFooter() {
+            const $btnFavorite = $('#preview-footer .btn-favorite');
+            const $favoriteNote = $('#favorite-note');
+            // 当前没有预览文件时禁用按钮并清除备注
+            if (!state.activeFile) {
+                $btnFavorite.prop('disabled', true).text('');
+                $favoriteNote.text('');
+                return;
+            } else {
+                $btnFavorite.prop('disabled', false);
+            }
+            // 根据 favorites 状态更新收藏按钮及备注内容
+            const fav = state.favorites.find(f => f.path === state.activeFile);
+            if (fav) {
+                $btnFavorite.text(currentLanguage === 'en' ? 'Unfavorite' : '取消收藏').data('action', 'remove');
+                $favoriteNote.text(fav.note || '');
+            } else {
+                $btnFavorite.text(currentLanguage === 'en' ? 'Favorite' : '收藏').data('action', 'add');
+                $favoriteNote.text('');
+            }
+        }
+
         function showPreview(path) {
             state.activeFile = path
             $.get(`/api/get_md?path=${encodeURIComponent(path)}`, html => {
                 $('#preview').html(html)
                 updateTabs()
+                updatePreviewFooter();
+                updateFileTreeHighlight(); // 新增：高亮当前文件
                 saveState()
             }).fail(() => {
                 $('#preview').html('<div class="alert alert-danger">文件加载失败</div>')
             })
-        }
-
-        function updateTabs() {
-            $('#nav-tabs .nav-link').removeClass('active')
-            $(`#nav-tabs .nav-link[data-path="${state.activeFile}"]`).addClass('active')
         }
 
         // 收藏功能 --------------------------------------------------------
@@ -419,6 +509,7 @@
                         updateToggleFavorite($(this));
                     }
                 });
+                updatePreviewFooter();
             })
         }
 
@@ -430,7 +521,7 @@
                     <div class="favorite-item list-group-item d-flex justify-content-between align-items-center" 
                          data-path="${fav.path}">
                         <div>
-                            <div>${fileName}</div>
+                            <div class="file-name">${fileName}</div>
                             <div class="small text-muted">${fav.note || (currentLanguage === 'en' ? 'No Note' : '无备注')}</div>
                         </div>
                         <i class="bi bi-x-circle text-danger btn-unfavorite"></i>
@@ -554,6 +645,53 @@
                 currentLanguage = currentLanguage === 'en' ? 'zh' : 'en';
                 localStorage.setItem('language', currentLanguage);
                 updateLanguage();
+            });
+
+            // 预览区底部：收藏按钮点击事件
+            $('#preview-footer .btn-favorite').on('click', function() {
+                if (!state.activeFile) return;
+                const path = state.activeFile;
+                const action = $(this).data('action');
+                if (action === 'add') {
+                    const note = prompt(currentLanguage === 'en' ? 'Enter a note for favorite:' : '请输入收藏备注：');
+                    if(note !== null) {
+                        $.ajax({
+                            url: '/api/favorites',
+                            method: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ path, note }),
+                            success: () => {
+                                loadFavorites();
+                                updatePreviewFooter();
+                            }
+                        });
+                    }
+                } else {
+                    if(confirm(currentLanguage === 'en' ? 'Are you sure to remove favorite?' : '确定要取消收藏吗？')) {
+                        $.ajax({
+                            url: '/api/favorites',
+                            method: 'DELETE',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ path }),
+                            success: () => {
+                                loadFavorites();
+                            }
+                        });
+                    }
+                }
+            });
+
+            // 预览区底部：复制相对路径按钮
+            $('#preview-footer .btn-copy-relative').on('click', function() {
+                if (!state.activeFile) return;
+                let text = Path.relative(baseDir, state.activeFile);
+                copyToClipboard(text);
+            });
+
+            // 预览区底部：复制绝对路径按钮
+            $('#preview-footer .btn-copy-absolute').on('click', function() {
+                if (!state.activeFile) return;
+                copyToClipboard(state.activeFile);
             });
         }
     </script>
