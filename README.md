@@ -1,5 +1,8 @@
 # Tiny Markdown Preview Server
 
+## Introduction
+zh_CN [简体中文](README_zh.md)
+
 A simple Flask-based Markdown preview server that lets you navigate directories and preview Markdown files with a GitHub-like style.
 
 ## Features
@@ -7,6 +10,7 @@ A simple Flask-based Markdown preview server that lets you navigate directories 
 - **Real-time Markdown Preview:** Render Markdown content live.
 - **Tab Management:** Open, close, and switch between multiple Markdown files.
 - **Favorites:** Easily save and access frequently used files.
+- **Multilingual Support:** Support for both Chinese and English.
 
 ![Screenshot](assets/image.png)
 

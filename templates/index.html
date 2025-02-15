@@ -201,6 +201,23 @@
             });
             // 更新语言切换按钮文本
             $('#language-toggle button').text(currentLanguage === 'en' ? "🌐 中文" : "🌐 English");
+            // 切换语言时更新每个文件项的toggle-favorite按钮
+            $('.file-item').each(function(){
+                if($(this).data('item')){
+                    updateToggleFavorite($(this));
+                }
+            });
+        }
+        
+        // 新增：更新单个文件项toggle-favorite按钮的文本与操作
+        function updateToggleFavorite($fileItem) {
+            const item = $fileItem.data('item');
+            if (!item) return;
+            const isFav = state.favorites.some(f => f.path === item.path);
+            $fileItem.find('.toggle-favorite')
+                .text(isFav ? (currentLanguage === 'en' ? 'Unfavorite' : '取消收藏')
+                            : (currentLanguage === 'en' ? 'Favorite' : '收藏'))
+                .data('action', isFav ? 'remove' : 'add');
         }
 
         // 初始化
@@ -313,6 +330,7 @@
                 });
                 $childrenContainer.html($ul);
                 $container.append($childrenContainer);
+                updateLanguage();
             });
         }
 
@@ -395,6 +413,12 @@
             $.get('/api/favorites', favorites => {
                 state.favorites = favorites
                 renderFavorites()
+                // Update each file-item toggle-favorite button based on current favorites state
+                $('.file-item').each(function(){
+                    if ($(this).data('item')) {
+                        updateToggleFavorite($(this));
+                    }
+                });
             })
         }
 
